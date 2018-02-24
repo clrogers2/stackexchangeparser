@@ -12,7 +12,7 @@ class StackExchange(object):
         HTML Parser that receives a string with HTML tags, strips out tags. get_data() will return a string devoid of HTML tags.
         
         """
-        def __init__(self):
+        def __init__(self, convert_charrefs=True):
             super().__init__()
             self.reset()
             self.strict = False
@@ -22,8 +22,10 @@ class StackExchange(object):
             self.fed.append(d)
         def get_data(self):
             return ''.join(self.fed)
+        def error(self, message):
+            pass
     
-    def __init__(self, file, community=None, content_type='post_title', remove_html=True):
+    def __init__(self, file, community=None, content_type='post_title', onlytags=[]):
         """
         A Prodigy compliant corpus loader that reads a StackExchange xml file and yields a stream of text in dictionary format.
         
@@ -31,6 +33,7 @@ class StackExchange(object):
         :param community: string, name of stackexchange community
         :param content_type: string, select the type of text to return: post_title, post_body, comments
         :param remove_html: Boolean, Remove or keep HTML tags in the text
+        :param onlytags: Only return posts which contain one or more of the provided tags
         """
         
         # Check that the path actually exists and is a recognizable XML file
@@ -39,6 +42,8 @@ class StackExchange(object):
         assert (se_file.suffix == '.xml'), "File does not end in '.xml'. Please check the path name and try again"
         self.file = se_file
         
+        # Regex to find newlines
+        self.newline = re.compile(r'\n+')
         #If user doesn't supply the community assume a normal unziping process occured and the community is the parent directory
         if not community:
              community = self.file.parent.parts[-1]
@@ -49,10 +54,18 @@ class StackExchange(object):
         assert (content_type.lower() in self._TYPES), "Content Type not understood. Acceptable types include {}".format(self._TYPES)
         self.content_type = content_type
         
-        assert(remove_html in [True, False]), "remove_html must be either True or False"
-        self.remove_html = remove_html
         # Lazily load the xml file, puts a blocking lock on the file
         self.tree = ET.iterparse(self.file.as_posix(), events=['start', 'end'])
+        
+        #To identify even more specific results a user can supply a StackExchange tag or tags. Only Posts with one or more tags will be returned
+        if type(onlytags) == str:
+            onlytags = [onlytags]
+        self.onlytags = onlytags
+        
+        # Keep track of Question tags for use by Answer Posts
+        # Also keep a count of the number of expected answers and the number of seen answers
+        self.parent_post_tags = {}
+        
     
     def _parse_tags(self, tags):
         """
@@ -87,33 +100,77 @@ class StackExchange(object):
                 info = {"meta": {"source": "StackExchange", "Community": self.community, "type": self.file.stem}}
 
                 atb = child.attrib
+                #Fetch the necessary information 
                 if self.content_type in self._TYPES[:3]:
+                    Id = atb.get('Id', None)
                     title = atb.get('Title', None)
                     body = atb.get('Body', None)
                     tags = atb.get('Tags', None)
-
-                    if self.content_type == 'post_both':
-                        if title and body:
-                            text =  title + '\n' + body 
-                        elif body and not title:
-                            text = body
-                        elif title and not body:
-                            text = title
+                    if tags != None:
+                        tags = self._parse_tags(tags)
+                    posttype = atb.get('PostTypeId', None)
+                    create = atb.get('CreationDate', None)
+                    answers = int(atb.get('AnswerCount', 0))
+                    
+                    # Preserve Tag information from Questions for reference by Answers
+                    if posttype == "1":
+                        if answers > 0:
+                            self.parent_post_tags[Id] = {'tags': tags, 'answers': answers, 'seen': 0}
+                    
+                    # If this post is an answer, lookup the tags on the parent question        
+                    elif posttype == "2":
+                        parentid = atb.get("ParentId", None)
+                        parent = self.parent_post_tags.get(parentid, None)
+                        
+                        if parent:
+                            tags = parent.get('tags', None)
                         else:
-                            text = None
+                            tags = None
+                        
+                        #If a parent answer value is found, update the seen answer count and check if all answers have been seen
+                        if parent:
+                                                    
+                            # TODO: Test this code to verify it works as intended
+                            # Update the seen answer count
+                            if parent['seen'] < parent['answers']:
+                                parent['seen'] += 1
 
-                    elif self.content_type == 'post_title':
-                        text = title
+                            # Now check if we've seen all the answers, If so, then delete the Parent Id entry to free up memory
+                            if parent['seen'] == parent['answers']:
+                                del self.parent_post_tags[parentid]    
+                            
+                    
+                    # If the user only wants text from Posts with specific stackExchange tags, only return content that matches
+                    # Naively iterates through the stream of Posts. It does not know if the tag actually exists
+                    # If the user supplies tags, and no tags match, skip this post
+                    if self.onlytags and not tags:
+                        continue
+                    elif self.onlytags and not any([tag for tag in tags if tag in self.onlytags]):
+                        continue
+                    else:   
+                        
+                        if self.content_type == 'post_both':
+                            if title and body:
+                                text =  title + '\n' + body 
+                            elif body and not title:
+                                text = body
+                            elif title and not body:
+                                text = title
+                            else:
+                                text = None
 
-                    elif self.content_type == 'post_body':
-                        text = body
+                        elif self.content_type == 'post_title':
+                            text = title
+
+                        elif self.content_type == 'post_body':
+                            text = body
 
                 elif self.content_type == 'comments':
-                    tags = None
+                    if self.onlytags:
+                        print("Tags are currently only available for Posts. Skipping search for {}".format(self.onlytags))
                     text = atb.get('Text', None)
 
                 else:
-                    tags = None
                     text = None
 
                 # Check to see if valid text was found, if not, skip to the next xml child element
@@ -122,19 +179,23 @@ class StackExchange(object):
 
                 else:
                     # unescape HTML encoding and remove html tags
-                    text = html.unescape(text)
-                    if self.remove_html:
-                        #HTML Stripper
-                        stripper = self.__MLStripper__()
-                        stripper.feed(text)
-                        text = stripper.get_data()
-
+                    #Preserve the original HTML
+                    info['html'] = text
+                    
+                    #text = html.unescape(text)  #TODO: Sometimes causes problems in the HTML stripper, disable for now, investigate later
+                    
+                    #HTML Stripper
+                    stripper = self.__MLStripper__()
+                    stripper.feed(text)
+                    text = stripper.get_data()
+                    
+                    # Remove
+                    cleantext = self.newline.sub(r'\n', text)
+                    
                     # Append the text and additional metadata to the stream dictionary
-                    info['text'] = text
-                    info['meta']['ID'] = atb['Id']
-
-                    if tags != None:
-                        tags = self._parse_tags(tags)
+                    info['text'] = cleantext
+                    info['meta']['ID'] = Id
+                    info['meta']['Date'] = create
                     info['meta']['Tags'] = tags
 
                     #yield the dictionary
