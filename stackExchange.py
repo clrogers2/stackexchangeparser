@@ -25,14 +25,14 @@ class StackExchange(object):
         def error(self, message):
             pass
     
-    def __init__(self, file, community=None, content_type='post_title', onlytags=[]):
+    def __init__(self, file, community=None, content_type='post_title', newlines=True, onlytags=[]):
         """
         A Prodigy compliant corpus loader that reads a StackExchange xml file and yields a stream of text in dictionary format.
         
         :param file: string path name to xml file
         :param community: string, name of stackexchange community
         :param content_type: string, select the type of text to return: post_title, post_body, comments
-        :param remove_html: Boolean, Remove or keep HTML tags in the text
+        :param newlines: Boolean, If True, keep newlines in text, if False, replace newlines with space.
         :param onlytags: Only return posts which contain one or more of the provided tags
         """
         
@@ -43,6 +43,7 @@ class StackExchange(object):
         self.file = se_file
         
         # Regex to find newlines
+        self.newlines = newlines
         self.newline = re.compile(r'\n+')
         #If user doesn't supply the community assume a normal unziping process occured and the community is the parent directory
         if not community:
@@ -189,8 +190,11 @@ class StackExchange(object):
                     stripper.feed(text)
                     text = stripper.get_data()
                     
-                    # Remove
-                    cleantext = self.newline.sub(r'\n', text)
+                    # Remove extra newlines or all newlines
+                    if self.newlines:
+                        cleantext = self.newline.sub(r'\n', text)
+                    else:
+                        cleantext = self.newline.sub(r' ', text)
                     
                     # Append the text and additional metadata to the stream dictionary
                     info['text'] = cleantext
