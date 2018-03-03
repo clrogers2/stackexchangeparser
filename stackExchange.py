@@ -3,6 +3,7 @@ import html
 from html.parser import HTMLParser
 from xml.etree import ElementTree as ET
 from pathlib import Path
+from prodigy.utils import log
 
 
 class StackExchange(object):
@@ -40,6 +41,7 @@ class StackExchange(object):
         se_file = Path(file).absolute()
         assert (se_file.exists()), "Cannot find file. Please check the path name and try again"
         assert (se_file.suffix == '.xml'), "File does not end in '.xml'. Please check the path name and try again"
+        log('STREAM: {} file found'.format(se_file.as_posix()))
         self.file = se_file
         
         # Regex to find newlines
@@ -56,12 +58,17 @@ class StackExchange(object):
         self.content_type = content_type
         
         # Lazily load the xml file, puts a blocking lock on the file
+        # TODO: Change to 'end' events only
         self.tree = ET.iterparse(self.file.as_posix(), events=['start', 'end'])
         
         #To identify even more specific results a user can supply a StackExchange tag or tags. Only Posts with one or more tags will be returned
         if type(onlytags) == str:
             onlytags = [onlytags]
         self.onlytags = onlytags
+        
+        # Keep a count of total and parsed rows
+        self.total = 0
+        self.parsed = 0
         
         # Keep track of Question tags for use by Answer Posts
         # Also keep a count of the number of expected answers and the number of seen answers
@@ -87,7 +94,9 @@ class StackExchange(object):
         
         # Iterate through the file and yield the text
         for _, child in self.tree:
-
+            
+            self.total += 1
+            log("STREAM: Fetching {} child element".format(self.total, child.attrib)
             # Start of file, check that the file matches the expected content_type
             if _ == 'start' and child.tag != 'row':
                 if self.content_type in self._TYPES[:3]:
@@ -203,6 +212,8 @@ class StackExchange(object):
                     info['meta']['Tags'] = tags
 
                     #yield the dictionary
+                    self.parsed += 1
+                    log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                     yield info
 
             # clear the child from memory before moving to the next child element
