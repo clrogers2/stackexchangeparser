@@ -1,14 +1,16 @@
 import re
-import html
 from html.parser import HTMLParser
 from xml.etree import ElementTree as ET
 from pathlib import Path
 from prodigy import log
+import requests
+from bs4 import BeautifulSoup
+import subprocess
 
 
-class StackExchange(object):
+class StackExchangeParser(object):
     
-    class __MLStripper__(HTMLParser):
+    class _TagStripper(HTMLParser):
         """
         HTML Parser that receives a string with HTML tags, strips out tags. get_data() will return a string devoid of HTML tags.
         
@@ -17,7 +19,7 @@ class StackExchange(object):
             super().__init__()
             self.reset()
             self.strict = False
-            self.convert_charrefs= True
+            self.convert_charrefs = convert_charrefs
             self.fed = []
 
         def handle_data(self, d):
@@ -29,43 +31,54 @@ class StackExchange(object):
         def error(self, message):
             pass
     
-    def __init__(self, file, community=None, content_type='post_title', newlines=True, onlytags=[]):
+    def __init__(self, file, community=None, content_type='post_title', metadata='all',
+                 newlines=True, onlytags=None):
         """
-        A Prodigy compliant corpus loader that reads a StackExchange xml file and yields a stream of text in dictionary format.
+        A Prodigy compliant corpus loader that reads a StackExchange xml file (or list of community urls) and yields a
+        stream of text in dictionary format.
         
-        :param file: string path name to xml file
-        :param community: string, name of stackexchange community
+        :param file: None or string path name to xml file. If None, read files from Archive.org using communities param.
+        :param community: string, name of StackExchange community
         :param content_type: string, select the type of text to return: post_title, post_body, comments
+        :param metadata: List of post metadata to include in output.
         :param newlines: Boolean, If True, keep newlines in text, if False, replace newlines with space.
         :param onlytags: Only return posts which contain one or more of the provided tags
         """
         
         # Check that the path actually exists and is a recognizable XML file
+        self.URL = 'https://archive.org/download/stackexchange/'
+        self.communities = self._get_community_names()
+
+        # Regex to find newlines
+        self.newlines = newlines
+        self.newline = re.compile(r'\n+')
+
+        # Acceptable types of StackExchange text content
+        self._TYPES = ['post_title', 'post_body', 'post_both', 'comments']
+        assert (content_type.lower() in self._TYPES), " Acceptable content_types include {}".format(self._TYPES)
+        self.content_type = content_type
+
+        if not file:
+            self.community = self._verify_community_names(community)
+            log('STREAM: Attempting to download {}'.format(self.community))
+            file = self._download_community(self.community)
+            log('STREAM: {} downloaded. Attempting to decompress Posts.xml file'.format(file))
+
         se_file = Path(file).absolute()
-        # There is no easy way to stream into memory, Archives and files compressed using 7zip's LZMA format
-        # So we must rely on the user to unzip the archive before using the file.
+
+        # If user doesn't supply the community assume a normal unziping process occurred and
+        # the community is the parent directory
+        if not community:
+            community = self.file.parent.parts[-1]
+        self.community = self._verify_community_names(community)
+
         assert (se_file.exists()), "Cannot find file. Please check the path name and try again"
         assert (se_file.suffix == '.xml'), "File does not end in '.xml'. Please check the path name and try again"
         log('STREAM: {} file found'.format(se_file.as_posix()))
         self.file = se_file
-        
-        # Regex to find newlines
-        self.newlines = newlines
-        self.newline = re.compile(r'\n+')
-        # If user doesn't supply the community assume a normal unziping process occured and
-        # the community is the parent directory
-        if not community:
-             community = self.file.parent.parts[-1]
-        self.community = community
-        
-        # Acceptable types of StackExchange text content
-        self._TYPES = ['post_title', 'post_body', 'post_both', 'comments']
-        assert (content_type.lower() in self._TYPES), "Content Type not understood. Acceptable types include {}".format(self._TYPES)
-        self.content_type = content_type
-        
+
         # Lazily load the xml file, puts a blocking lock on the file
-        # TODO: Change to 'end' events only
-        self.tree = ET.iterparse(self.file.as_posix(), events=['start', 'end'])
+        self.tree = ET.iterparse(self.file.as_posix(), events=['end'])
         
         # To identify even more specific results a user can supply a StackExchange tag or tags.
         # Only Posts with one or more tags will be returned
@@ -80,6 +93,73 @@ class StackExchange(object):
         # Keep track of Question tags for use by Answer Posts
         # Also keep a count of the number of expected answers and the number of seen answers
         self.parent_post_tags = {}
+    
+    def _get_community_names(self):
+        URL = self.URL
+        page = requests.get(URL)
+        page_html = BeautifulSoup(page.text, 'lxml')
+        div = page_html.find('div', class_='download-directory-listing')
+        table = div.find('table', class_='directory-listing-table')
+        body = table.find_all('a')
+        coms = [row.text.replace(".7z", "") for row in body if row.text.endswith('7z')]
+        return coms
+
+    def _verify_community_names(self, com):
+
+        assert isinstance(com, str), "Community name must be a string"
+        if com not in self.communities:
+            log("STREAM: {com} not found in online archive at {url}".format(com=com, url=self.URL))
+        assert (com in self.communities), """StackExchange community--{com}--not found 
+        in online archive at {url}""".format(com=com, url=self.URL)
+        return com
+
+    @staticmethod
+    def _rename_and_extract_7zip( file_name):
+        posts = 'Posts' in file_name
+        comments = 'Comments' in file_name
+        tags = 'Tags' in file_name
+        com_name = file_name.split('.')[0]
+        if posts or (not posts and not comments and not tags):
+            output_name = '{}_Posts.xml'.format(com_name)
+            subprocess.call('7z rn {file} Posts.xml {com}'.format(file=file_name, com=output_name))
+            subprocess.call('7z e {file} -iy {com} -o .'.format(file=file_name, com=output_name))
+            return './'+output_name
+        elif comments:
+            output_name = '{}_Comments.xml'.format(com_name)
+            subprocess.call('7z rn {file} Comments.xml {com}'.format(file=file_name, com=output_name))
+            subprocess.call('7z e {file} -iy {com} -o .'.format(file=file_name, com=output_name))
+            return './' + output_name
+        elif tags:
+            output_name = '{}_Tags.xml'.format(com_name)
+            subprocess.call('7z rn {file} Tags.xml {com}'.format(file=file_name, com=output_name))
+            subprocess.call('7z e {file} -iy {com} -o .'.format(file=file_name, com=output_name))
+            return './' + output_name
+        else:
+            return None
+
+    def _generate_file_markers(self, file_obj, mem_size=50, mem_unit='MB', order='default'):
+        ORDERS = ['default', 'beginning', 'ending', 'shuffle']
+        UNITS = {'GB': 4**1024, 'MB': 3**1024, 'KB': 2**1024, 'B': 1}
+        if order.lower() not in ORDERS:
+            order = 'default'
+        if mem_unit not in UNITS.keys():
+            mem_unit = 'MB'
+
+        _mem_size = mem_size * UNITS[mem_unit]
+        pass
+
+    def _download_community(self, community):
+        url = self.URL + community + '.7z'
+        local_filename = url.split('/')[-1]
+        # NOTE the stream=True parameter below
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(local_filename, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk:  # filter out keep-alive new chunks
+                        f.write(chunk)
+                        # f.flush()
+        return local_filename
 
     def _parse_tags(self, tags):
         """
@@ -102,9 +182,9 @@ class StackExchange(object):
         for _, child in self.tree:
             
             self.total += 1
-            log("STREAM: Fetching {} child element".format(self.total, child.attrib))
+            log("STREAM: Fetching {} child element".format(self.total))
             # Start of file, check that the file matches the expected content_type
-            if _ == 'start' and child.tag != 'row':
+            if child.tag != 'row':
                 if self.content_type in self._TYPES[:3]:
                     assert(child.tag == 'posts'), "Input file is not a StackExchange Posts.xml file. \
                     Please check the path name and try again"
@@ -114,7 +194,7 @@ class StackExchange(object):
                     Please check the path name and try again"
 
             else:   
-                # Assemble the prodigy stream compliant dictonary object
+                # Assemble the prodigy stream compliant dictionary object
                 info = {"meta": {"source": "StackExchange", "Community": self.community, "type": self.file.stem}}
 
                 atb = child.attrib
@@ -129,6 +209,11 @@ class StackExchange(object):
                     posttype = atb.get('PostTypeId', None)
                     create = atb.get('CreationDate', None)
                     answers = int(atb.get('AnswerCount', 0))
+                    favorite = int(atb.get('FavoritCount', 0))
+                    score = int(atb.get('Score', 0))
+                    comments = int(atb.get('CommentCount', 0))
+                    views = int(atb.get('ViewCount', 0))
+
                     
                     # Preserve Tag information from Questions for reference by Answers
                     if posttype == "1":
@@ -207,7 +292,7 @@ class StackExchange(object):
                     #text = html.unescape(text)
                     
                     # HTML Stripper
-                    stripper = self.__MLStripper__()
+                    stripper = self._TagStripper()
                     stripper.feed(text)
                     text = stripper.get_data()
                     
