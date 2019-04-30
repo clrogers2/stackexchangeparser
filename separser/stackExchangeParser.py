@@ -2,10 +2,13 @@ import re
 from html.parser import HTMLParser
 from xml.etree import ElementTree as ET
 from pathlib import Path
-from prodigy import log
 import requests
 from bs4 import BeautifulSoup
 import subprocess
+try:
+    from prodigy import log
+except ImportError:
+    from .utils import log
 
 
 class StackExchangeParser(object):
@@ -31,8 +34,7 @@ class StackExchangeParser(object):
         def error(self, message):
             pass
     
-    def __init__(self, file, community=None, content_type='post_title', metadata='all',
-                 newlines=True, onlytags=None):
+    def __init__(self, file, community=None, content_type='post_title', newlines=True, onlytags=None):
         """
         A Prodigy compliant corpus loader that reads a StackExchange xml file (or list of community urls) and yields a
         stream of text in dictionary format.
@@ -40,7 +42,6 @@ class StackExchangeParser(object):
         :param file: None or string path name to xml file. If None, read files from Archive.org using communities param.
         :param community: string, name of StackExchange community
         :param content_type: string, select the type of text to return: post_title, post_body, comments
-        :param metadata: List of post metadata to include in output.
         :param newlines: Boolean, If True, keep newlines in text, if False, replace newlines with space.
         :param onlytags: Only return posts which contain one or more of the provided tags
         """
@@ -213,8 +214,9 @@ class StackExchangeParser(object):
                     score = int(atb.get('Score', 0))
                     comments = int(atb.get('CommentCount', 0))
                     views = int(atb.get('ViewCount', 0))
-
-                    
+                    acceptedanswer = int(atb.get('AcceptedAnswerId', None))
+                    lastedit = atb.get('LastEditDate', None)
+                    lastactivity = atb.get('LastActivityDate', None)
                     # Preserve Tag information from Questions for reference by Answers
                     if posttype == "1":
                         if answers > 0:
