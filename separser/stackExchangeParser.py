@@ -1,4 +1,5 @@
 import re
+import os
 from html.parser import HTMLParser
 from xml.etree import ElementTree as ET
 from pathlib import Path
@@ -9,6 +10,7 @@ try:
     from prodigy import log
 except ImportError:
     from .utils import log
+from .utils import find_program, capture_7zip_stdout
 
 
 class StackExchangeParser(object):
@@ -34,21 +36,21 @@ class StackExchangeParser(object):
         def error(self, message):
             pass
     
-    def __init__(self, file, community=None, content_type='post_title', newlines=True, onlytags=None):
+    def __init__(self, file, community=None, content_type='post_body', newlines=True, onlytags=None):
         """
         A Prodigy compliant corpus loader that reads a StackExchange xml file (or list of community urls) and yields a
         stream of text in dictionary format.
         
         :param file: None or string path name to xml file. If None, read files from Archive.org using communities param.
         :param community: string, name of StackExchange community
-        :param content_type: string, select the type of text to return: post_title, post_body, comments
+        :param content_type: string, select the type of text to return: [post_title, post_body, post_both, comments]
         :param newlines: Boolean, If True, keep newlines in text, if False, replace newlines with space.
         :param onlytags: Only return posts which contain one or more of the provided tags
         """
-        
+        self.iter = iter(self)
         # Check that the path actually exists and is a recognizable XML file
         self.URL = 'https://archive.org/download/stackexchange/'
-        self.communities = self._get_community_names()
+        self.communities, self.latest_data_date = self._get_community_names()
 
         # Regex to find newlines
         self.newlines = newlines
@@ -62,17 +64,31 @@ class StackExchangeParser(object):
         if not file:
             self.community = self._verify_community_names(community)
             log('STREAM: Attempting to download {}'.format(self.community))
-            file = self._download_community(self.community)
-            log('STREAM: {} downloaded. Attempting to decompress Posts.xml file'.format(file))
+            download_file = self._download_community(self.community)
+            log('STREAM: {} downloaded. Attempting to decompress Posts.xml file'.format(download_file))
+            file = self._rename_and_extract_7zip(download_file)
+
+        if '.7z' in file:
+            file = self._rename_and_extract_7zip(file)
 
         se_file = Path(file).absolute()
-
-        # If user doesn't supply the community assume a normal unziping process occurred and
-        # the community is the parent directory
+        # If user provides an xml file, but doesn't supply the community name, try to determine the community from
+        # either the path or the name of the file. If no community is identified, set community to 'unknown'
         if not community:
-            community = self.file.parent.parts[-1]
+            test_com = se_file.parent.parts[-1]
+            test_name = se_file.name.split('_')
+            if '.com' in test_com:
+                community = test_com
+            elif len(test_name) > 1:
+                if 'stackoverflow' not in test_name[0]:
+                    community = test_name[0] + '.stackexchange.com'
+                else:
+                    community = test_name[0] + '.com'
+            else:
+                community = 'unknown'
         self.community = self._verify_community_names(community)
 
+        # ensure the file exists and is now in xml format
         assert (se_file.exists()), "Cannot find file. Please check the path name and try again"
         assert (se_file.suffix == '.xml'), "File does not end in '.xml'. Please check the path name and try again"
         log('STREAM: {} file found'.format(se_file.as_posix()))
@@ -100,43 +116,71 @@ class StackExchangeParser(object):
         page = requests.get(URL)
         page_html = BeautifulSoup(page.text, 'lxml')
         div = page_html.find('div', class_='download-directory-listing')
-        table = div.find('table', class_='directory-listing-table')
-        body = table.find_all('a')
-        coms = [row.text.replace(".7z", "") for row in body if row.text.endswith('7z')]
-        return coms
+        coms, dates = [], set()
+        for row in div.select('table.directory-listing-table tr'):
+            contents = row.contents
+            com = str(contents[1].contents[0].contents[0])
+            if '7z' in com:
+                coms.append(com.replace('.7z', ''))
+                d = contents[3].contents[0][:11]
+                dates.add(d[3:].replace('-', ''))
+
+        return coms, dates.pop()
 
     def _verify_community_names(self, com):
+        if com == 'unknown':
+            return com
+        else:
+            assert isinstance(com, str), "Community name must be a string"
+            if com not in self.communities:
+                log("STREAM: {com} not found in online archive at {url}".format(com=com, url=self.URL))
+            assert (com in self.communities), """StackExchange community--{com}--not found in online archive at {url}""".format(com=com, url=self.URL)
+            return com
 
-        assert isinstance(com, str), "Community name must be a string"
-        if com not in self.communities:
-            log("STREAM: {com} not found in online archive at {url}".format(com=com, url=self.URL))
-        assert (com in self.communities), """StackExchange community--{com}--not found 
-        in online archive at {url}""".format(com=com, url=self.URL)
-        return com
+    def _rename_and_extract_7zip(self, file):
+        program = find_program()
+        if program is None:
+            raise EnvironmentError("7-Zip not found in OS environment. Archive cannot be extracted")
 
-    @staticmethod
-    def _rename_and_extract_7zip( file_name):
+        # Path might have a partial or full path, convert to Path object, check if it exists, then pass just the name
+        # to
+        se_file_name = Path(file).absolute()
+        assert (se_file_name.exists()), "Cannot find {} file. Please check the path name and try again"\
+            .format(se_file_name.as_posix())
+        file_name = se_file_name.name
+        file_path = se_file_name.as_posix()
+
         posts = 'Posts' in file_name
         comments = 'Comments' in file_name
         tags = 'Tags' in file_name
         com_name = file_name.split('.')[0]
         if posts or (not posts and not comments and not tags):
+
+            input_name = 'Posts.xml'
+            self.type = input_name
             output_name = '{}_Posts.xml'.format(com_name)
-            subprocess.call('7z rn {file} Posts.xml {com}'.format(file=file_name, com=output_name))
-            subprocess.call('7z e {file} -iy {com} -o .'.format(file=file_name, com=output_name))
-            return './'+output_name
         elif comments:
+            input_name = 'Comments.xml'
+            self.type = input_name
             output_name = '{}_Comments.xml'.format(com_name)
-            subprocess.call('7z rn {file} Comments.xml {com}'.format(file=file_name, com=output_name))
-            subprocess.call('7z e {file} -iy {com} -o .'.format(file=file_name, com=output_name))
-            return './' + output_name
+
         elif tags:
+            input_name = 'Tags.xml'
+            self.type = input_name
             output_name = '{}_Tags.xml'.format(com_name)
-            subprocess.call('7z rn {file} Tags.xml {com}'.format(file=file_name, com=output_name))
-            subprocess.call('7z e {file} -iy {com} -o .'.format(file=file_name, com=output_name))
-            return './' + output_name
+
         else:
+            self.type = None
             return None
+        parent = se_file_name.parent
+
+        archive_details = capture_7zip_stdout('{prog}7z l -ba -slt "{file}"'.format(prog=program, file=file_path))
+        if archive_details.get(input_name, None):
+            subprocess.call('{prog}7z rn -ba "{file}" "{fin}" "{fout}"'.format(prog=program, file=file_path, fin=input_name,
+                                                                           fout=output_name))
+        subprocess.call('{prog}7z e -ba "{file}" "{fout}" -aoa'.format(prog=program, file=file_path, loc=parent,
+                                                                   fout=output_name))
+        return se_file_name.parent.joinpath(output_name).as_posix()
 
     def _generate_file_markers(self, file_obj, mem_size=50, mem_unit='MB', order='default'):
         ORDERS = ['default', 'beginning', 'ending', 'shuffle']
@@ -152,14 +196,14 @@ class StackExchangeParser(object):
     def _download_community(self, community):
         url = self.URL + community + '.7z'
         local_filename = url.split('/')[-1]
-        # NOTE the stream=True parameter below
+
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
             with open(local_filename, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
-                        # f.flush()
+
         return local_filename
 
     def _parse_tags(self, tags):
@@ -176,7 +220,11 @@ class StackExchangeParser(object):
             t = re.compile('<(.+?)>')
             m = t.findall(tags)
             return m
-        
+
+    def __next__(self):
+
+        return self.iter.__next__()
+
     def __iter__(self):
         
         # Iterate through the file and yield the text
@@ -196,12 +244,12 @@ class StackExchangeParser(object):
 
             else:   
                 # Assemble the prodigy stream compliant dictionary object
-                info = {"meta": {"source": "StackExchange", "Community": self.community, "type": self.file.stem}}
+                info = {"meta": {"source": "StackExchange", "Community": self.community, "type": self.type}}
 
                 atb = child.attrib
                 # Fetch the necessary information
                 if self.content_type in self._TYPES[:3]:
-                    Id = atb.get('Id', None)
+                    Id = int(atb.get('Id', None))
                     title = atb.get('Title', None)
                     body = atb.get('Body', None)
                     tags = atb.get('Tags', None)
@@ -210,27 +258,24 @@ class StackExchangeParser(object):
                     posttype = atb.get('PostTypeId', None)
                     create = atb.get('CreationDate', None)
                     answers = int(atb.get('AnswerCount', 0))
-                    favorite = int(atb.get('FavoritCount', 0))
-                    score = int(atb.get('Score', 0))
-                    comments = int(atb.get('CommentCount', 0))
-                    views = int(atb.get('ViewCount', 0))
-                    acceptedanswer = int(atb.get('AcceptedAnswerId', None))
-                    lastedit = atb.get('LastEditDate', None)
-                    lastactivity = atb.get('LastActivityDate', None)
-                    # Preserve Tag information from Questions for reference by Answers
-                    if posttype == "1":
-                        if answers > 0:
-                            self.parent_post_tags[Id] = {'tags': tags, 'answers': answers, 'seen': 0}
                     
+                    # Preserve Tag information from Questions for reference by Answers
+                    if posttype == 1:
+                        if answers > 0:
+                            self.parent_post_tags[Id] = {'tags': tags, 'title': title, 'answers': answers, 'seen': 0}
+                        parentid = None
+
                     # If this post is an answer, lookup the tags on the parent question        
-                    elif posttype == "2":
-                        parentid = atb.get("ParentId", None)
+                    elif posttype == 2:
+                        parentid = int(atb.get("ParentId", None))
                         parent = self.parent_post_tags.get(parentid, None)
                         
                         if parent:
                             tags = parent.get('tags', None)
+                            title = self.parent_post_tags.get(title, None)
                         else:
                             tags = None
+                            title = None
                         
                         # If a parent answer value is found, update the seen answer count and
                         # check if all answers have been seen
@@ -307,8 +352,22 @@ class StackExchangeParser(object):
                     # Append the text and additional metadata to the stream dictionary
                     info['text'] = cleantext
                     info['meta']['ID'] = Id
-                    info['meta']['Date'] = create
+                    if posttype == 2:
+                        info['meta']['ParentTitle'] = title
+                    else:
+                        info['meta']['title'] = title
+                    info['meta']['CreationDate'] = create
                     info['meta']['Tags'] = tags
+                    info['meta']['FavoriteCount'] = int(atb.get('FavoriteCount', 0))
+                    info['meta']['PostScore'] = int(atb.get('Score', 0))
+                    info['meta']['CommentCount'] = int(atb.get('CommentCount', 0))
+                    info['meta']['Views'] = int(atb.get('ViewCount', 0))
+                    aa = atb.get('AcceptedAnswerId', None)
+                    if aa is not None:
+                        aa = int(aa)
+                    info['meta']['AcceptedAnswer'] = int(aa) if aa is not None else aa
+                    info['meta']['LastEdit'] = atb.get('LastEditDate', None)
+                    info['meta']['LastActivity'] = atb.get('LastActivityDate', None)
 
                     # yield the dictionary
                     self.parsed += 1
