@@ -21,8 +21,7 @@ setup(
     author='Christopher Rogers',
     author_email='christopher.rogers27@gmail.com',
     python_requires='>3.5',
-    install_requires=['xml',
-                      'beautifulsoup4',
+    install_requires=['beautifulsoup4',
                       'requests',
                       'plac',
                       'lxml'
