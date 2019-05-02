@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import subprocess
+import requests
 
 logger = logging.getLogger("StackExchangeParser")
 syslog = logging.FileHandler(filename='./separse.log', encoding='utf-8')
@@ -30,11 +31,46 @@ def find_program_win(program_to_find='SOFTWARE\\7-Zip'):
             return None
     except PermissionError:
         log("7-Zip not found!! ")
-        return None
+        answer = query_yes_no("Do you wish to install 7zip? ", default='yes')
+        if answer:
+
+            url = "https://www.7-zip.org/a/7z1900-x64.msi"
+            log("Attempting to download {}".format(url))
+            local_filename = url.split('/')[-1]
+
+            with requests.get(url, stream=True) as r:
+                r.raise_for_status()
+                homepath = os.environ.get('HOMEPATH', ".")
+                parentpath = "C:" + homepath + "\\Downloads\\"
+                filepath = parentpath + local_filename
+                with open(filepath, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        if chunk:  # filter out keep-alive new chunks
+                            f.write(chunk)
+
+            log("Attempting to install {}".format(local_filename))
+            print("Please check for a Windows Installer icon on the Task Bar and follow the prompts.")
+            subprocess.call('msiexec /i "{fp}" /passive /norestart /l*v {pp}7zip_install.log'.format(fp=filepath,
+                                                                                                     pp=parentpath))
+            return find_program_win()
+        else:
+            return None
 
 
 def find_program_other(cmd='7z'):
-    return shutil.which(cmd=cmd)
+    available = shutil.which(cmd=cmd)
+    if not available:
+        log("7-Zip not found!! ")
+        answer = query_yes_no("Do you wish to install 7zip? ", default='yes')
+        if answer:
+            from pkg_resources import resource_filename
+            log("Attempting to download and install 7zip")
+            filepath = resource_filename('utils', 'include/install_7zip.sh')
+            subprocess.call("bash {}".format(filepath))
+        else:
+            return None
+    else:
+        return available
 
 
 def capture_7zip_stdout(call):
@@ -86,3 +122,36 @@ def capture_7zip_stdout(call):
     os.close(stdout_save)
 
     return create_dict(captured_stdout)
+
+
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via input() and return answer.
+
+    :param question: is a string that is presented to the user.
+    :param default: is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
