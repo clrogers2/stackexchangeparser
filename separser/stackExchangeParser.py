@@ -62,7 +62,10 @@ class StackExchangeParser(object):
         :param onlytags: Only return posts which contain one or more of the provided tags
         """
         self.iter = iter(self)
-        file = file.split(',')  # If a single file is passed in, it will be placed into a list
+        if file:
+            file = file.split(',')  # If a single file is passed in, it will be placed into a list
+            if len(file) == 1:  # Only one file was passed in, so remove it from the list before testing
+                file = file[0]
         self._resume_keys = ['Id', 'Date']
         if resume_from:
             assert([*resume_from][0] in self._resume_keys)
@@ -97,8 +100,7 @@ class StackExchangeParser(object):
             _ = 's'
 
         self.file = {}
-        if len(file) == 1:  # Only one file was passed in, so remove it from the list before testing
-            file = file[0]
+
         # Testing for single files
         string_like = isinstance(file, str)
 
