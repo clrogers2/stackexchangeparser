@@ -1,11 +1,14 @@
 import logging
-import winreg
 import shutil
 import os
 import sys
 import threading
 import subprocess
 import requests
+try:
+    import winreg
+except ModuleNotFoundError:
+    pass
 
 logger = logging.getLogger("StackExchangeParser")
 syslog = logging.FileHandler(filename='./separse.log', encoding='utf-8')
