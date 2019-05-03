@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 import subprocess
 try:
     from prodigy import log
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     from .utils import log
 from .utils import find_program, capture_7zip_stdout
 
