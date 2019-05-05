@@ -28,7 +28,7 @@ def find_program_win(program_to_find='SOFTWARE\\7-Zip'):
         h_key = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, program_to_find)
         try:
             prog_path = (winreg.QueryValueEx(h_key, 'Path'))[0]
-            return prog_path
+            return prog_path + '7z'
         except OSError:
             log("7-Zip isn't correctly installed!! ")
             return None
