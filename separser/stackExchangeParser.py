@@ -332,11 +332,11 @@ class StackExchangeParser(object):
 
     def _download_community(self, community):
         url = self.URL + community + '.7z'
-        local_filename = url.split('/')[-1]
+        local_filename = self.proj_dir.joinpath(url.split('/')[-1])
 
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
-            with open(self.proj_dir.joinpath(local_filename), 'wb') as f:
+            with open(local_filename, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
