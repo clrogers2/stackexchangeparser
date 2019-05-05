@@ -308,14 +308,14 @@ class StackExchangeParser(object):
             return None
         parent = se_file_name.parent
 
-        archive_details = capture_7zip_stdout('{prog} l -ba -slt "{file}"'.format(prog=program, file=file_path))
+        archive_details = capture_7zip_stdout('{prog} l -ba -slt "{file}"'.format(prog=program, file=se_file_name))
         output_files = {}
         for input_name, output_name in zip(input_names, output_names):
             if archive_details.get(input_name, None):
-                subprocess.call('{prog} rn -ba "{file}" "{fin}" "{fout}"'.format(prog=program, file=file_path,
-                                                                                   fin=input_name, fout=output_name))
-            subprocess.call('{prog} e -ba "{file}" "{fout}" -aoa'.format(prog=program, file=file_path, loc=parent,
-                                                                           fout=output_name))
+                subprocess.call('{prog} rn -ba "{file}" "{fin}" "{fout}"'.format(prog=program, file=se_file_name,
+                                                                                 fin=input_name, fout=output_name))
+            subprocess.call('{prog} e -ba "{file}" "{fout}" -aoa'.format(prog=program, file=se_file_name,
+                                                                         fout=output_name))
             output_files[input_name.replace('.xml', '')] = (parent.joinpath(output_name).as_posix())
         return output_files
 
