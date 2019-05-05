@@ -35,7 +35,7 @@ class StackExchangeParser(object):
         def error(self, message):
             pass
     
-    def __init__(self, file, community, resume_from=None, content_type='post_body', newlines=True, onlytags=None):
+    def __init__(self, file, community, proj_dir='.', resume_from=None, content_type='post_body', newlines=True, onlytags=None):
         """
         A Prodigy compliant corpus loader that reads a StackExchange xml file (or list of community urls) and yields a
         stream of text in dictionary format.
@@ -61,6 +61,11 @@ class StackExchangeParser(object):
         :param newlines: Boolean, If True, keep newlines in text, if False, replace newlines with space.
         :param onlytags: Only return posts which contain one or more of the provided tags
         """
+
+        self.proj_dir = Path(proj_dir).absolute()
+        if not self.proj_dir.exists():
+            self.proj_dir.mkdir(parents=True)
+
         self.iter = iter(self)
         if file:
             file = file.split(',')  # If a single file is passed in, it will be placed into a list
@@ -331,7 +336,7 @@ class StackExchangeParser(object):
 
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
-            with open(local_filename, 'wb') as f:
+            with open(self.proj_dir.joinpath(local_filename), 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
