@@ -5,6 +5,7 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 import subprocess
+import time
 try:
     from prodigy import log
 except (ImportError, ModuleNotFoundError):
@@ -341,7 +342,7 @@ class StackExchangeParser(object):
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
-
+        time.sleep(5)  # Under conditions of heavy disk usage, the filesystem may not unlock the file for a few seconds
         return local_filename
 
     def _clean_text(self, text):
