@@ -311,7 +311,7 @@ class StackExchangeParser(object):
         archive_details = capture_7zip_stdout('{prog} l -ba -slt "{file}"'.format(prog=program, file=file_path))
         output_files = {}
         for input_name, output_name in zip(input_names, output_names):
-            out_path = parent.joinpath(output_name).as_posix()
+            out_path = parent.joinpath(output_name)
             if archive_details.get(input_name, None):
                 subprocess.call('{prog} rn -ba "{file}" "{fin}" "{fout}"'.format(prog=program, file=file_path,
                                                                                  fin=input_name, fout=output_name))
