@@ -309,15 +309,13 @@ class StackExchangeParser(object):
             return None
         parent = se_file_name.parent
 
-        archive_details = capture_7zip_stdout('{prog} l -ba -slt "{file}"'.format(prog=program, file=file_path))
+        archive_details = capture_7zip_stdout([program, "l", "-ba", "-slt", file_path])
         output_files = {}
         for input_name, output_name in zip(input_names, output_names):
             out_path = parent.joinpath(output_name)
             if archive_details.get(input_name, None):
-                subprocess.call('{prog} rn -ba "{file}" "{fin}" "{fout}"'.format(prog=program, file=file_path,
-                                                                                 fin=input_name, fout=output_name))
-            subprocess.call('{prog} e -ba "{file}" -o"{out}" "{fout}" -aoa '.format(prog=program, file=file_path,
-                                                                                   fout=output_name, out=parent))
+                subprocess.call([program, "rn", "-ba", file_path, input_name, output_name])
+            subprocess.call([program, "e", "-ba", file_path, "-o{}".format(parent), output_name, "-aoa"])
             output_files[input_name.replace('.xml', '')] = out_path
         return output_files
 
@@ -342,7 +340,7 @@ class StackExchangeParser(object):
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
-        time.sleep(5)  # Under conditions of heavy disk usage, the filesystem may not unlock the file for a few seconds
+        time.sleep(2)  # Under conditions of heavy disk usage, the filesystem may not unlock the file for a few seconds
         return local_filename
 
     def _clean_text(self, text):
