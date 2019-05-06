@@ -315,7 +315,7 @@ class StackExchangeParser(object):
             if archive_details.get(input_name, None):
                 subprocess.call('{prog} rn -ba "{file}" "{fin}" "{fout}"'.format(prog=program, file=file_path,
                                                                                  fin=input_name, fout=output_name))
-            subprocess.call('{prog} e -ba "{file}" -o{out} "{fout}" -aoa '.format(prog=program, file=file_path,
+            subprocess.call('{prog} e -ba "{file}" -o"{out}" "{fout}" -aoa '.format(prog=program, file=file_path,
                                                                                    fout=output_name, out=parent))
             output_files[input_name.replace('.xml', '')] = out_path
         return output_files
