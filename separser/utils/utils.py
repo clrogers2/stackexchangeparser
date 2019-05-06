@@ -18,8 +18,10 @@ logger.setLevel("INFO")
 logger.addHandler(syslog)
 
 
-def log(message):
+def log(message, *args, **kwargs):
     logger.info(message)
+    [logger.debug(arg) for arg in args]
+    [logger.debug(kwarg) for kwarg in kwargs]
 
 
 def find_program_win(program_to_find='SOFTWARE\\7-Zip'):
