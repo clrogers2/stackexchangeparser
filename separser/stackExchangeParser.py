@@ -127,7 +127,7 @@ class StackExchangeParser(object):
         elif string_like and '.xml' in file:
                 if '&' not in _name:
                     se_files = {_name: Path(file).absolute()}
-                else:  # Single file passed in, but user requested
+                else:  # Single file passed in, but user requested parsing both comments and posts
                     fp = Path(file).absolute()
                     name = fp.stem[fp.stem.find('_')+1:]
                     other = dict(Posts="Comments", Comments="Posts")
@@ -145,12 +145,26 @@ class StackExchangeParser(object):
         elif file is None:
             # Make sure community parameter exists and is a viable StackExchange Community
             self.community = self._verify_community_names(community)
-            # Download the community archive file
-            log('STREAM: Attempting to download {}'.format(self.community))
-            download_file = self._download_community(self.community)
-            # Rename the file's so they have the community tag prepended and extract
-            log('STREAM: {} downloaded. Attempting to decompress {} file{}'.format(download_file, _name, _))
-            se_files = self._rename_and_extract_7zip(download_file, _name)
+
+            cache = self._check_for_cached(self.community, _name)
+            if 'xml' in cache:
+                log('STREAM: Cached xml files found!')
+                se_files = {file.stem.split('_')[1]: file for file in cache['xml']}
+
+            elif '7z' in cache:
+                log('STREAM: Cached 7zip files found!')
+                file = cache['7z']
+                log('STREAM: {} downloaded. Attempting to decompress {} file{}'.format(file, _name, _))
+                se_files = self._rename_and_extract_7zip(file, _name)
+
+            else:
+                log('STREAM: No cached files found in project directory')
+                # Download the community archive file
+                log('STREAM: Attempting to download {}'.format(self.community))
+                download_file = self._download_community(self.community)
+                # Rename the file's so they have the community tag prepended and extract
+                log('STREAM: {} downloaded. Attempting to decompress {} file{}'.format(download_file, _name, _))
+                se_files = self._rename_and_extract_7zip(download_file, _name)
 
         else:
             raise ValueError("File not understood. Please check file parameter and try again.")
@@ -234,6 +248,21 @@ class StackExchangeParser(object):
         # Keep track of Question tags for use by Answer Posts
         # Also keep a count of the number of expected answers and the number of seen answers
         self.parent_post_attribs = {}
+
+    def _check_for_cached(self, com, file_type):
+        files = {x.name: x for x in self.proj_dir.iterdir() if x.is_file()}
+        z_name = com+'.7z'
+        if '&' in file_type:
+            types = [com.split('.')[0]+'_{}.xml'.format(t) for t in file_type.split(' & ')]
+        else:
+            types = [com.split('.')[0]+'_{}.xml'.format(file_type)]
+
+        if all(t in files for t in types):
+            return {'xml': [files[name] for name in types]}
+        elif z_name in files:
+            return {'7z': files[z_name]}
+        else:
+            return {}
 
     def _find_other_file(self, file, other):
         com_file = file.name
