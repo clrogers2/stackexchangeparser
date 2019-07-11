@@ -8,6 +8,8 @@ import subprocess
 import time
 from .utils import find_program, capture_7zip_stdout
 
+log = None
+
 
 class StackExchangeParser(object):
     
