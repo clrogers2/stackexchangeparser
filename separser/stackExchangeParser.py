@@ -294,7 +294,7 @@ class StackExchangeParser(object):
         return coms, dates.pop()
 
     def _verify_community_names(self, com):
-        com = '.'.join(re.split('.|_', com))
+        com = '.'.join(re.split('[._]', com))
         assert isinstance(com, str), "Community name must be in string format. Instead got {}".format(type(com))
         if com not in self.communities:
             log("STREAM: {com} not found in online archive at {url}".format(com=com, url=self.URL))
