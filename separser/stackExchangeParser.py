@@ -422,7 +422,8 @@ class StackExchangeParser(object):
         for _, child in self.tree:
 
             self.total += 1
-            self.log("STREAM: Fetching {} child element".format(self.total))
+            if self.total % 10000 == 0:
+                self.log("STREAM: Fetching {} child element".format(self.total))
 
             # Start of file, check that the file matches the expected content_type
             if child.tag != 'row':
@@ -583,7 +584,7 @@ class StackExchangeParser(object):
 
                     # yield the dictionary
                     self.parsed += 1
-                    if self.total % 100000 == 0:
+                    if self.total % 10000 == 0:
                         self.log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                     yield info
 
@@ -643,7 +644,7 @@ class StackExchangeParser(object):
 
                             # yield the dictionary
                             self.parsed += 1
-                            if self.total % 100000 == 0:
+                            if self.total % 10000 == 0:
                                 self.log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                             yield info
 
