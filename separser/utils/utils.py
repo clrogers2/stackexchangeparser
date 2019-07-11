@@ -10,6 +10,8 @@ try:
 except ModuleNotFoundError:
     pass
 
+logger = None
+
 
 def init_logger(proj_dir, level):
     logger = logging.getLogger("StackExchangeParser")
@@ -22,7 +24,8 @@ def init_logger(proj_dir, level):
 
 
 # TODO refactor into class that has various verbosity levels
-def log(message, logger=None, *args, **kwargs):
+def log(message, *args, **kwargs):
+    global logger
     logger.info(message)
     [logger.debug(arg) for arg in args]
     [logger.debug(kwarg) for kwarg in kwargs]
