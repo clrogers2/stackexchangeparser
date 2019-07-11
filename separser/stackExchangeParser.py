@@ -583,7 +583,7 @@ class StackExchangeParser(object):
 
                     # yield the dictionary
                     self.parsed += 1
-                    if _ % 10000 == 0:
+                    if self.total % 100000 == 0:
                         self.log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                     yield info
 
@@ -643,7 +643,7 @@ class StackExchangeParser(object):
 
                             # yield the dictionary
                             self.parsed += 1
-                            if _ % 10000 == 0:
+                            if self.total % 100000 == 0:
                                 self.log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                             yield info
 
