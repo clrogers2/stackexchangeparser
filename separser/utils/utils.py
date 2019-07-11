@@ -14,6 +14,7 @@ logger = None
 
 
 def init_logger(proj_dir, level):
+    global logger
     logger = logging.getLogger("StackExchangeParser")
     syslog = logging.FileHandler(filename=proj_dir+'separse.log', encoding='utf-8')
     formatter = logging.Formatter('%(asctime)s %(name)s - %(levelname)s:%(message)s')
