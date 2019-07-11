@@ -1,4 +1,4 @@
-from .utils import log, capture_7zip_stdout, query_yes_no
+from .utils import log, capture_7zip_stdout, query_yes_no, init_logger
 import os
 if os.name == 'nt':
     from .utils import find_program_win as find_program

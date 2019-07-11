@@ -9,7 +9,8 @@ import time
 try:
     from prodigy import log
 except (ImportError, ModuleNotFoundError):
-    from .utils import log
+    from .utils import log, init_logger
+    logger = None
 from .utils import find_program, capture_7zip_stdout
 
 
@@ -68,7 +69,8 @@ class StackExchangeParser(object):
         self.proj_dir = Path(proj_dir).absolute()
         if not self.proj_dir.exists():
             self.proj_dir.mkdir(parents=True)
-
+        global logger
+        logger = init_logger(self.proj_dir, 'INFO')
         self.iter = iter(self)
         if file:
             file = file.split(',')  # If a single file is passed in, it will be placed into a list
@@ -576,7 +578,8 @@ class StackExchangeParser(object):
 
                     # yield the dictionary
                     self.parsed += 1
-                    log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
+                    if _ % 10000 == 0:
+                        log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                     yield info
 
                 elif self.content_type in self._TYPES[4:6]:
@@ -635,7 +638,8 @@ class StackExchangeParser(object):
 
                             # yield the dictionary
                             self.parsed += 1
-                            log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
+                            if _ % 10000 == 0:
+                                log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                             yield info
 
                 else:
