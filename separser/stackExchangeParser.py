@@ -7,8 +7,10 @@ from bs4 import BeautifulSoup
 import subprocess
 import time
 from .utils import find_program, capture_7zip_stdout
-
-log = None
+try:
+    from prodigy import log
+except (ImportError, ModuleNotFoundError):
+    from .utils.log import Log
 
 
 class StackExchangeParser(object):
@@ -66,12 +68,9 @@ class StackExchangeParser(object):
         self.proj_dir = Path(proj_dir).absolute()
         if not self.proj_dir.exists():
             self.proj_dir.mkdir(parents=True)
-        self.log_dir = self.proj_dir.joinpath('logs/')
 
-        global log
-        if not log:
-            from .utils.log import Log
-            log = Log(log_dir=self.log_dir.as_posix())
+        self.log_dir = self.proj_dir.joinpath('logs/')
+        self.log = Log(log_dir=self.log_dir.as_posix())
 
         self.iter = iter(self)
         if file:

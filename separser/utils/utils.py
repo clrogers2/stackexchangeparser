@@ -8,7 +8,9 @@ try:
     import winreg
 except ModuleNotFoundError:
     pass
-from ..utils import log
+from .log import Log
+
+log = Log()
 
 
 def find_program_win(program_to_find='SOFTWARE\\7-Zip'):

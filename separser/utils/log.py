@@ -4,10 +4,15 @@ from pathlib import Path
 
 class Log(object):
     def __init__(self, log_dir=None):
+        self.name = "StackExchangeParser"
         if not log_dir:
             self.log_dir = Path.home().joinpath('logs/').as_posix()
-        self.name = "StackExchangeParser"
-        self._logger = self.init_logger(self.name)
+
+        loggers = logging.Logger.manager.loggerDict
+        if self.name in loggers.keys():
+            self._logger = logging.getLogger(self.name)
+        else:
+            self._logger = self.init_logger(self.name)
 
     def init_logger(self, name):
         logger = logging.getLogger(name)
