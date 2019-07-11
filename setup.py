@@ -11,7 +11,7 @@ def readme():
 
 setup(
     name='stackexchangeparser',
-    version='1.5',
+    version='2.0.1',
     description="A Prodigy compliant parser and API caller for the StackExchange corpus",
     long_description=readme(),
     keywords='Prodigy StackExchange StackOverflow NLP Natural Language Processing Parsing',

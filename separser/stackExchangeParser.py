@@ -17,7 +17,8 @@ class StackExchangeParser(object):
     
     class _TagStripper(HTMLParser):
         """
-        HTML Parser that receives a string with HTML tags, strips out tags. get_data() will return a string devoid of HTML tags.
+        HTML Parser that receives a string with HTML tags, strips out tags. get_data() will return a string devoid of
+        HTML tags.
         
         """
         def __init__(self, convert_charrefs=True):
@@ -36,7 +37,8 @@ class StackExchangeParser(object):
         def error(self, message):
             pass
     
-    def __init__(self, file, community, proj_dir='.', resume_from=None, content_type='post_body', newlines=True, onlytags=None):
+    def __init__(self, file, community, proj_dir='.', resume_from=None, content_type='post_body', newlines=True,
+                 onlytags=None):
         """
         A Prodigy compliant corpus loader that reads a StackExchange xml file (or list of community urls) and yields a
         stream of text in dictionary format.
@@ -291,7 +293,7 @@ class StackExchangeParser(object):
         return coms, dates.pop()
 
     def _verify_community_names(self, com):
-
+        com = '.'.join(re.split('.|_', com))
         assert isinstance(com, str), "Community name must be in string format. Instead got {}".format(type(com))
         if com not in self.communities:
             log("STREAM: {com} not found in online archive at {url}".format(com=com, url=self.URL))
@@ -404,7 +406,7 @@ class StackExchangeParser(object):
 
     def __iter__(self):
         # Get values for filtering out rows
-        if self.resume_from is not None:
+        if self.resume_from is not None or self.resume_from is not False:
             key, value = self.resume_from.items()
         else:
             key, value = None, None
@@ -450,7 +452,7 @@ class StackExchangeParser(object):
                 # Fetch the necessary information based on the content_type specified
                 if self.content_type in self._TYPES[:4]:
                     # Assemble the prodigy stream compliant dictionary object
-                    info = {"meta": {"source": "StackExchange", "Community": self.community, "type": self.type}}
+                    info = {"meta": {"source": "StackExchange", "Community": self.community, "file_type": self.type}}
 
                     id = atb.get('Id', None)
                     title = atb.get('Title', None)
@@ -490,7 +492,8 @@ class StackExchangeParser(object):
                             tags = self.parent_post_attribs[parentid].get('tags', None)
                             title = self.parent_post_attribs[parentid].get('title', None)
 
-                            if self.parent_post_attribs[parentid]['seen'] >= self.parent_post_attribs[parentid]['answers']:
+                            if self.parent_post_attribs[parentid]['seen'] >= \
+                                    self.parent_post_attribs[parentid]['answers']:
                                 # We've seen all the answers, delete the Parent Id entry to free up memory
                                 del self.parent_post_attribs[parentid]
                         else:
@@ -578,7 +581,7 @@ class StackExchangeParser(object):
 
                 elif self.content_type in self._TYPES[4:6]:
                     # Assemble the prodigy stream compliant dictionary object
-                    info = {"meta": {"source": "StackExchange", "Community": self.community, "type": self.type}}
+                    info = {"meta": {"source": "StackExchange", "Community": self.community, "file_type": self.type}}
                     id = atb.get('Id', None)
                     postid = atb.get('PostId', None)
                     body = atb.get('Text', None)
