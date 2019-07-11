@@ -9,8 +9,8 @@ import time
 try:
     from prodigy import log
 except (ImportError, ModuleNotFoundError):
-    from .utils import log, init_logger
-    logger = None
+    from .utils.log import Log
+    log = Log()
 from .utils import find_program, capture_7zip_stdout
 
 
@@ -69,8 +69,7 @@ class StackExchangeParser(object):
         self.proj_dir = Path(proj_dir).absolute()
         if not self.proj_dir.exists():
             self.proj_dir.mkdir(parents=True)
-        global logger
-        logger = init_logger(self.proj_dir.as_posix(), 'INFO')
+
         self.iter = iter(self)
         if file:
             file = file.split(',')  # If a single file is passed in, it will be placed into a list

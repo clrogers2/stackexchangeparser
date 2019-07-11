@@ -1,35 +1,16 @@
-import logging
 import shutil
 import os
 import sys
 import threading
 import subprocess
 import requests
+from .log import Log
 try:
     import winreg
 except ModuleNotFoundError:
     pass
 
-logger = None
-
-
-def init_logger(proj_dir, level):
-    global logger
-    logger = logging.getLogger("StackExchangeParser")
-    syslog = logging.FileHandler(filename=proj_dir+'separse.log', encoding='utf-8')
-    formatter = logging.Formatter('%(asctime)s %(name)s - %(levelname)s:%(message)s')
-    syslog.setFormatter(formatter)
-    logger.setLevel(level)
-    logger.addHandler(syslog)
-    return logger
-
-
-# TODO refactor into class that has various verbosity levels
-def log(message, *args, **kwargs):
-    global logger
-    logger.info(message)
-    [logger.debug(arg) for arg in args]
-    [logger.debug(kwarg) for kwarg in kwargs]
+log = Log()
 
 
 def find_program_win(program_to_find='SOFTWARE\\7-Zip'):
