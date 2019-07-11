@@ -422,7 +422,7 @@ class StackExchangeParser(object):
         for _, child in self.tree:
 
             self.total += 1
-            self.self.log("STREAM: Fetching {} child element".format(self.total))
+            self.log("STREAM: Fetching {} child element".format(self.total))
 
             # Start of file, check that the file matches the expected content_type
             if child.tag != 'row':
