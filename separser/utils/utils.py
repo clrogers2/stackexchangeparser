@@ -4,13 +4,11 @@ import sys
 import threading
 import subprocess
 import requests
-from .log import Log
 try:
     import winreg
 except ModuleNotFoundError:
     pass
-
-log = Log()
+global log
 
 
 def find_program_win(program_to_find='SOFTWARE\\7-Zip'):

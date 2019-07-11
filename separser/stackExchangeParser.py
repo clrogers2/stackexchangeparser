@@ -6,11 +6,6 @@ import requests
 from bs4 import BeautifulSoup
 import subprocess
 import time
-try:
-    from prodigy import log
-except (ImportError, ModuleNotFoundError):
-    from .utils.log import Log
-    log = Log()
 from .utils import find_program, capture_7zip_stdout
 
 
@@ -69,12 +64,19 @@ class StackExchangeParser(object):
         self.proj_dir = Path(proj_dir).absolute()
         if not self.proj_dir.exists():
             self.proj_dir.mkdir(parents=True)
+        self.log_dir = self.proj_dir.joinpath('logs/')
+
+        global log
+        if not log:
+            from .utils.log import Log
+            log = Log(log_dir=self.log_dir.as_posix())
 
         self.iter = iter(self)
         if file:
             file = file.split(',')  # If a single file is passed in, it will be placed into a list
             if len(file) == 1:  # Only one file was passed in, so remove it from the list before testing
                 file = file[0]
+
         self._resume_keys = ['Id', 'Date']
         if resume_from:
             assert([*resume_from][0] in self._resume_keys)

@@ -5,7 +5,7 @@ from pathlib import Path
 class Log(object):
     def __init__(self, log_dir=None):
         if not log_dir:
-            self.log_dir = Path.home().joinpath('SageMaker/efs/content_coverage/').as_posix()
+            self.log_dir = Path.home().joinpath('logs/').as_posix()
         self.name = "StackExchangeParser"
         self._logger = self.init_logger(self.name)
 
