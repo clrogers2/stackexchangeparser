@@ -10,11 +10,9 @@ except ModuleNotFoundError:
     pass
 from .log import Log
 
-log = Log()
 
-
-def find_program_win(program_to_find='SOFTWARE\\7-Zip'):
-
+def find_program_win(name, program_to_find='SOFTWARE\\7-Zip'):
+    log = Log(name=name)
     try:
         h_key = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, program_to_find)
         try:
@@ -51,7 +49,8 @@ def find_program_win(program_to_find='SOFTWARE\\7-Zip'):
             return None
 
 
-def find_program_other(cmd='7z'):
+def find_program_other(name, cmd='7z'):
+    log = Log(name=name)
     available = shutil.which(cmd=cmd)
     if not available:
         log("7-Zip not found!! ")

@@ -3,8 +3,8 @@ from pathlib import Path
 
 
 class Log(object):
-    def __init__(self, community, log_dir=None):
-        self.name = community
+    def __init__(self, name, log_dir=None):
+        self.name = name
 
         if isinstance(log_dir, str):
             self.log_dir = Path(log_dir).absolute()

@@ -66,14 +66,14 @@ class StackExchangeParser(object):
         """
 
         self.proj_dir = Path(proj_dir).absolute()
+
         if not self.proj_dir.exists():
             self.proj_dir.mkdir(parents=True)
-
         self.log_dir = self.proj_dir.joinpath('logs/')
         try:
             self.log = log
         except NameError:
-            self.log = Log(log_dir=self.log_dir.as_posix())
+            self.log = Log(name=community, log_dir=self.log_dir)
 
         self.iter = iter(self)
         if file:
@@ -310,7 +310,7 @@ class StackExchangeParser(object):
             return com
 
     def _rename_and_extract_7zip(self, file, name):
-        program = find_program()
+        program = find_program(name=self.community)
         if program is None:
             raise EnvironmentError("7-Zip not found in OS environment. Archive cannot be extracted")
 
