@@ -36,7 +36,7 @@ class StackExchangeParser(object):
 
         def error(self, message):
             pass
-    
+
     def __init__(self, file, community, proj_dir='.', resume_from=None, content_type='post_body', newlines=True,
                  onlytags=None):
         """
@@ -70,7 +70,10 @@ class StackExchangeParser(object):
             self.proj_dir.mkdir(parents=True)
 
         self.log_dir = self.proj_dir.joinpath('logs/')
-        self.log = Log(log_dir=self.log_dir.as_posix())
+        try:
+            self.log = log
+        except NameError:
+            self.log = Log(log_dir=self.log_dir.as_posix())
 
         self.iter = iter(self)
         if file:
@@ -154,22 +157,22 @@ class StackExchangeParser(object):
 
             cache = self._check_for_cached(self.community, _name)
             if 'xml' in cache:
-                log('STREAM: Cached xml files found!')
+                self.log('STREAM: Cached xml files found!')
                 se_files = {file.stem.split('_')[1]: file for file in cache['xml']}
 
             elif '7z' in cache:
-                log('STREAM: Cached 7zip files found!')
+                self.log('STREAM: Cached 7zip files found!')
                 file = cache['7z']
-                log('STREAM: {} downloaded. Attempting to decompress {} file{}'.format(file, _name, _))
+                self.log('STREAM: {} downloaded. Attempting to decompress {} file{}'.format(file, _name, _))
                 se_files = self._rename_and_extract_7zip(file, _name)
 
             else:
-                log('STREAM: No cached files found in project directory')
+                self.log('STREAM: No cached files found in project directory')
                 # Download the community archive file
-                log('STREAM: Attempting to download {}'.format(self.community))
+                self.log('STREAM: Attempting to download {}'.format(self.community))
                 download_file = self._download_community(self.community)
                 # Rename the file's so they have the community tag prepended and extract
-                log('STREAM: {} downloaded. Attempting to decompress {} file{}'.format(download_file, _name, _))
+                self.log('STREAM: {} downloaded. Attempting to decompress {} file{}'.format(download_file, _name, _))
                 se_files = self._rename_and_extract_7zip(download_file, _name)
 
         else:
@@ -200,7 +203,7 @@ class StackExchangeParser(object):
         for key, se_file in se_files.items():
             assert (se_file.exists()), "Cannot find {}".format(key)
             assert (se_file.suffix == '.xml'), "File {} does not end in '.xml'.".format(key)
-            log('STREAM: {} file found'.format(se_file.as_posix()))
+            self.log('STREAM: {} file found'.format(se_file.as_posix()))
             self.file[key] = se_file
 
         # Lazily load the xml file, puts a blocking lock on the file
@@ -300,7 +303,7 @@ class StackExchangeParser(object):
         com = '.'.join(re.split('[._]', com))
         assert isinstance(com, str), "Community name must be in string format. Instead got {}".format(type(com))
         if com not in self.communities:
-            log("STREAM: {com} not found in online archive at {url}".format(com=com, url=self.URL))
+            self.log("STREAM: {com} not found in online archive at {url}".format(com=com, url=self.URL))
             raise ValueError("StackExchange community--{com}--not found in online archive at {url}"
                              .format(com=com, url=self.URL))
         else:
@@ -419,7 +422,7 @@ class StackExchangeParser(object):
         for _, child in self.tree:
 
             self.total += 1
-            log("STREAM: Fetching {} child element".format(self.total))
+            self.self.log("STREAM: Fetching {} child element".format(self.total))
 
             # Start of file, check that the file matches the expected content_type
             if child.tag != 'row':
@@ -581,7 +584,7 @@ class StackExchangeParser(object):
                     # yield the dictionary
                     self.parsed += 1
                     if _ % 10000 == 0:
-                        log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
+                        self.log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                     yield info
 
                 elif self.content_type in self._TYPES[4:6]:
@@ -641,7 +644,7 @@ class StackExchangeParser(object):
                             # yield the dictionary
                             self.parsed += 1
                             if _ % 10000 == 0:
-                                log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
+                                self.log("STREAM: {p} of {t} XML child element parsed".format(p=self.parsed, t=self.total), info)
                             yield info
 
                 else:
