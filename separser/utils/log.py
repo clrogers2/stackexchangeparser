@@ -11,6 +11,8 @@ class Log(object):
         loggers = logging.Logger.manager.loggerDict
         if self.name in loggers.keys():
             self._logger = logging.getLogger(self.name)
+            if not self._logger.handlers:
+                self._logger = self.init_logger(self.name)
         else:
             self._logger = self.init_logger(self.name)
 

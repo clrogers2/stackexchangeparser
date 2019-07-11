@@ -37,7 +37,7 @@ class StackExchangeParser(object):
         def error(self, message):
             pass
 
-    def __init__(self, file, community, proj_dir='.', resume_from=None, content_type='post_body', newlines=True,
+    def __init__(self, file, community, proj_dir='.', resume_from=False, content_type='post_body', newlines=True,
                  onlytags=None):
         """
         A Prodigy compliant corpus loader that reads a StackExchange xml file (or list of community urls) and yields a
@@ -413,10 +413,10 @@ class StackExchangeParser(object):
 
     def __iter__(self):
         # Get values for filtering out rows
-        if self.resume_from is not None or self.resume_from is not False:
-            key, value = self.resume_from.items()
-        else:
+        if self.resume_from is None or self.resume_from is False:
             key, value = None, None
+        else:
+            key, value = self.resume_from.items()
 
         # Iterate through the file and yield the text
         for _, child in self.tree:
