@@ -6,11 +6,14 @@ import requests
 from bs4 import BeautifulSoup
 import subprocess
 import time
-from .utils import find_program, capture_7zip_stdout
+from .utils import find_program, capture_7zip_stdout, chunker, generate_file_markers
 try:
     from prodigy import log
 except (ImportError, ModuleNotFoundError):
     from .utils.log import Log
+from itertools import chain
+import numpy as np
+from multiprocessing import cpu_count
 
 
 class StackExchangeParser(object):
@@ -38,7 +41,7 @@ class StackExchangeParser(object):
             pass
 
     def __init__(self, file, community, proj_dir='.', resume_from=False, content_type='post_body', newlines=True,
-                 onlytags=None):
+                 onlytags=None, order='default', splits=0):
         """
         A Prodigy compliant corpus loader that reads a StackExchange xml file (or list of community urls) and yields a
         stream of text in dictionary format.
@@ -64,7 +67,11 @@ class StackExchangeParser(object):
         :param newlines: Boolean, If True, keep newlines in text, if False, replace newlines with space.
         :param onlytags: Only return posts which contain one or more of the provided tags
         """
-
+        # TODO split __iter__ logic into methods where possible
+        # Variables for working with multiple XML streams
+        self.cpu_count = cpu_count()
+        self.order = order.lower()
+        self.splits = int(splits)
         self.proj_dir = Path(proj_dir).absolute()
 
         if not self.proj_dir.exists():
@@ -258,6 +265,41 @@ class StackExchangeParser(object):
         # Also keep a count of the number of expected answers and the number of seen answers
         self.parent_post_attribs = {}
 
+    def chunk_and_order_file(self):
+        if self.splits < 0 or not isinstance(self.splits, int):
+            self.splits = splits = self.cpu_count - 2
+        order = self.order
+        markers = generate_file_markers(self.file['Posts'])
+        return self._order_file_markers(markers, order, splits)
+
+    def _order_file_markers(self, markers, order, n):
+        ORDERS = ['default', 'beginning', 'ending', 'shuffle', 'split']
+        order = order.lower()
+        if order not in ORDERS:
+            print("The order you provided is not recognized")
+            answer = input("Do you wish to use default sorting order?: ")
+            if answer.lower() in ['y', 'yes', 'ye', 'okay', 'ok']:
+                order = 'beginning'
+            else:
+                return None
+
+        splits = chunker(markers, n)
+
+        if order == 'default':
+            return splits
+
+        elif order == 'beginning':
+            return list(chain.from_iterable(splits))
+
+        elif order == 'ending':
+            return [split[::-1] for split in splits]
+
+        elif order == 'shuffle':
+            return [np.random.shuffle(split) for split in splits]
+
+        elif order == 'split':
+            return list(zip(*splits))
+
     def _check_for_cached(self, com, file_type):
         files = {x.name: x for x in self.proj_dir.iterdir() if x.is_file()}
         z_name = com+'.7z'
@@ -357,17 +399,6 @@ class StackExchangeParser(object):
             output_files[input_name.replace('.xml', '')] = out_path
         return output_files
 
-    def _generate_file_markers(self, file_obj, mem_size=50, mem_unit='MB', order='default'):
-        ORDERS = ['default', 'beginning', 'ending', 'shuffle']
-        UNITS = {'GB': 4**1024, 'MB': 3**1024, 'KB': 2**1024, 'B': 1}
-        if order.lower() not in ORDERS:
-            order = 'default'
-        if mem_unit not in UNITS.keys():
-            mem_unit = 'MB'
-
-        _mem_size = mem_size * UNITS[mem_unit]
-        pass
-
     def _download_community(self, community):
         url = self.URL + community + '.7z'
         local_filename = self.proj_dir.joinpath(url.split('/')[-1])
@@ -460,7 +491,7 @@ class StackExchangeParser(object):
                 # Fetch the necessary information based on the content_type specified
                 if self.content_type in self._TYPES[:4]:
                     # Assemble the prodigy stream compliant dictionary object
-                    info = {"meta": {"source": "StackExchange", "Community": self.community, "file_type": self.type}}
+                    info = {"meta": {"source": "            ", "Community": self.community, "file_type": self.type}}
 
                     id = atb.get('Id', None)
                     title = atb.get('Title', None)
