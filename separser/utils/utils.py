@@ -9,6 +9,7 @@ try:
 except ModuleNotFoundError:
     pass
 from .log import Log
+import math
 
 
 def find_program_win(name, program_to_find='SOFTWARE\\7-Zip'):
@@ -148,3 +149,33 @@ def query_yes_no(question, default="yes"):
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "
                              "(or 'y' or 'n').\n")
+
+
+def chunker(seq, chunks):
+    avg = math.ceil(len(seq) / chunks)
+    last = 0
+    while last < len(seq):
+        yield seq[last:last+avg]
+        last += avg
+
+
+def generate_file_markers(file_obj, mem_size=100, mem_unit='MB'):
+
+    UNITS = {'GB': 4**1024, 'MB': 3**1024, 'KB': 2**1024, 'B': 1}
+    if mem_unit not in UNITS.keys():
+        mem_unit = 'MB'
+
+    chunk_size = mem_size * UNITS[mem_unit]
+    end_byte = os.stat(file_obj).st_size
+    cur_byte = 0
+    file_markers = []
+    with open(file_obj, 'r') as xf:
+        for i in list(range(start=cur_byte, stop=end_byte, step=chunk_size))[1:]:
+            xf.seek(i, os.SEEK_CUR)
+            line = xf.readline()
+            if line != '':
+                next_byte = xf.tell()+1
+                file_markers.append((cur_byte, next_byte))
+                cur_byte = next_byte
+            else:
+                file_markers.append((cur_byte, end_byte))
