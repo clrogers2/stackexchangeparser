@@ -31,7 +31,7 @@ setup(
             'separse=separser.utils.command_line:main'
         ],
         'prodigy_loaders': [
-            'se_parse = separser.StackExchangeParser'
+            'se_parse = stackexchangeparser:StackExchangeParser'
         ]
     },
     include_package_data=True,
