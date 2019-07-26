@@ -27,7 +27,12 @@ setup(
                       'lxml'
                       ],
     entry_points={
-        'console_scripts': ['separse=separser.utils.command_line:main']
+        'console_scripts': [
+            'separse=separser.utils.command_line:main'
+        ],
+        'prodigy_loaders': [
+            'se_parse = separser.StackExchangeParser'
+        ]
     },
     include_package_data=True,
     classifiers=["Development Status :: 3 - Alpha",
